@@ -21,13 +21,40 @@ Options:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sqlite3
-import struct
 import sys
 from datetime import datetime, timezone
+
+try:
+    import zstandard as zstd
+    _zstd_dctx = zstd.ZstdDecompressor()
+    HAS_ZSTD = True
+except ImportError:
+    HAS_ZSTD = False
+
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+def decompress_content(raw):
+    if not isinstance(raw, bytes) or not raw:
+        return raw or ""
+    if HAS_ZSTD and raw[:4] == ZSTD_MAGIC:
+        try:
+            return _zstd_dctx.decompress(raw, max_output_size=65536).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+    try:
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def build_md5_lookup(contacts):
+    return {hashlib.md5(u.encode()).hexdigest().lower(): u for u in contacts}
 
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH  = os.path.join(SCRIPT_DIR, "config.json")
@@ -185,7 +212,8 @@ def cmd_build(args):
         print("Removed existing embeddings.db")
 
     print("Loading contacts...")
-    contacts = load_contacts(decrypted_dir)
+    contacts  = load_contacts(decrypted_dir)
+    md5_lookup = build_md5_lookup(contacts)
 
     embedder   = _get_embedder()
     embed_conn = init_embed_db()
@@ -224,43 +252,45 @@ def cmd_build(args):
         )]
 
         for table in tables:
+            # Resolve talker from MD5 table name
+            table_hash   = table[4:]
+            talker       = md5_lookup.get(table_hash, table_hash)
+            contact_name = contacts.get(talker, talker)
+
             cur = conn.execute(f"SELECT * FROM [{table}] LIMIT 1")
             if cur.fetchone() is None:
                 continue
             col_names = {d[0].lower() for d in cur.description}
 
-            time_col    = next((c for c in ["create_time","createtime","timestamp"]          if c in col_names), None)
-            type_col    = next((c for c in ["local_type","type","msgtype"]                    if c in col_names), None)
-            content_col = next((c for c in ["message_content","content","strcontent","body"]  if c in col_names), None)
-            talker_col  = next((c for c in ["talker","strtalker","sender"]                    if c in col_names), None)
+            time_col    = next((c for c in ["create_time","createtime","timestamp"]         if c in col_names), None)
+            type_col    = next((c for c in ["local_type","type","msgtype"]                   if c in col_names), None)
+            content_col = next((c for c in ["message_content","content","strcontent","body"] if c in col_names), None)
 
-            if not (time_col and content_col and talker_col):
+            if not (time_col and content_col):
                 continue
 
-            sel = ", ".join(filter(None, [time_col, type_col, content_col, talker_col]))
+            sel = ", ".join(filter(None, [time_col, type_col, content_col]))
             for row in conn.execute(f"SELECT {sel} FROM [{table}]"):
-                row     = dict(row)
-                ts      = row.get(time_col)
-                mtype   = int(row.get(type_col, 1) or 1)
-                content = row.get(content_col, "") or ""
-                talker  = row.get(talker_col,  "") or ""
+                row   = dict(row)
+                ts    = row.get(time_col)
+                mtype = int(row.get(type_col, 1) or 1)
+                raw   = row.get(content_col, b"") or b""
+
+                content = decompress_content(raw) if isinstance(raw, bytes) else (raw or "")
 
                 # Only index plain-text messages with real content
                 if mtype != 1 or not content or len(content.strip()) < 3:
                     continue
-                # Skip messages that are mostly XML / system text
                 if content.strip().startswith("<") or content.startswith("http"):
                     continue
 
-                contact_name = contacts.get(talker, talker)
-
                 batch_texts.append(content[:512])
                 batch_meta.append({
-                    "talker": talker,
+                    "talker":       talker,
                     "contact_name": contact_name,
-                    "msg_time": ts or 0,
-                    "msg_type": mtype,
-                    "content": content[:1000],
+                    "msg_time":     ts or 0,
+                    "msg_type":     mtype,
+                    "content":      content[:1000],
                 })
 
                 if len(batch_texts) >= BATCH_SIZE:
@@ -271,7 +301,7 @@ def cmd_build(args):
 
     flush_batch()
     embed_conn.close()
-    print(f"\nDone — {total_indexed:,} messages indexed to embeddings.db")
+    print(f"\nDone -- {total_indexed:,} messages indexed to embeddings.db")
 
 
 # ── Search ───────────────────────────────────────────────────────────────────

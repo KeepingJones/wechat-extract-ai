@@ -35,6 +35,29 @@ import sqlite3
 import sys
 from datetime import datetime, timezone
 
+try:
+    import zstandard as zstd
+    _zstd_dctx = zstd.ZstdDecompressor()
+    HAS_ZSTD = True
+except ImportError:
+    HAS_ZSTD = False
+
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+def decompress_content(raw):
+    if not isinstance(raw, bytes) or not raw:
+        return raw or ""
+    if HAS_ZSTD and raw[:4] == ZSTD_MAGIC:
+        try:
+            return _zstd_dctx.decompress(raw, max_output_size=65536).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+    try:
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH   = os.path.join(SCRIPT_DIR, "config.json")
 SUMMARY_DIR   = None   # set in main() from config
@@ -127,22 +150,31 @@ def load_messages_for_contact(decrypted_dir, talker, month_filter=None):
         cur = conn.execute(f"SELECT * FROM [{target_table}] LIMIT 1")
         col_names = {d[0].lower() for d in cur.description}
 
-        time_col    = next((c for c in ["create_time","createtime","timestamp"]         if c in col_names), None)
-        type_col    = next((c for c in ["local_type","type","msgtype"]                   if c in col_names), None)
-        content_col = next((c for c in ["message_content","content","strcontent","body"] if c in col_names), None)
-        send_col    = next((c for c in ["issend","issender","is_sender"]                 if c in col_names), None)
+        time_col      = next((c for c in ["create_time","createtime","timestamp"]         if c in col_names), None)
+        type_col      = next((c for c in ["local_type","type","msgtype"]                   if c in col_names), None)
+        content_col   = next((c for c in ["message_content","content","strcontent","body"] if c in col_names), None)
+        send_col      = next((c for c in ["issend","issender","is_sender"]                 if c in col_names), None)
+        sender_id_col = next((c for c in ["real_sender_id","real_sender"]                  if c in col_names), None)
 
         if not (time_col and content_col):
             conn.close()
             continue
 
-        sel = ", ".join(filter(None, [time_col, type_col, content_col, send_col]))
+        sel = ", ".join(filter(None, [time_col, type_col, content_col, send_col, sender_id_col]))
         for row in conn.execute(f"SELECT {sel} FROM [{target_table}] ORDER BY {time_col}"):
-            row     = dict(row)
-            ts      = row.get(time_col) or 0
-            mtype   = int(row.get(type_col, 1) or 1)
-            content = row.get(content_col, "") or ""
-            is_sent = bool(row.get(send_col, 0))
+            row   = dict(row)
+            ts    = row.get(time_col) or 0
+            mtype = int(row.get(type_col, 1) or 1)
+            raw   = row.get(content_col, b"") or b""
+
+            content = decompress_content(raw) if isinstance(raw, bytes) else (raw or "")
+
+            if send_col:
+                is_sent = bool(row.get(send_col, 0))
+            elif sender_id_col:
+                is_sent = (row.get(sender_id_col) == 2)
+            else:
+                is_sent = False
 
             if mtype != 1 or not content or len(content.strip()) < 2:
                 continue
