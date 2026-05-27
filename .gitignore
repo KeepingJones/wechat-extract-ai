@@ -21,6 +21,9 @@ transcription_cache.json
 translation_cache.json
 failed_stickers.json
 
+# AI search index (large, machine-specific)
+embeddings.db
+
 # Virtual environments
 venv/
 .venv/

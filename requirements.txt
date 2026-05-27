@@ -1,5 +1,16 @@
+# Core export pipeline
 pycryptodome
 jinja2
 zstandard
 pilk
 SpeechRecognition
+
+# Analytics
+numpy
+
+# AI search (semantic search + RAG)
+sentence-transformers
+
+# AI summaries — install one or both:
+ollama          # local LLM via Ollama (https://ollama.com)
+openai          # OpenAI API (set OPENAI_API_KEY env var)

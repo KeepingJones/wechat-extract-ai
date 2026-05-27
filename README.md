@@ -40,6 +40,10 @@ A Python tool that **decrypts WeChat PC (Windows) databases** and exports every 
 | 🔍 **Live search** | In-page search that highlights matching messages in real time |
 | 📅 **Date dividers** | Messages grouped by date for easy reading |
 | ⚡ **CLI filters** | Export a specific contact, date range, or use incremental mode |
+| 📊 **Analytics dashboard** | Activity heatmap, top contacts, hourly/weekday charts, word cloud |
+| 🔎 **Semantic search** | Natural language search across all messages using local AI embeddings |
+| 🤖 **AI Q&A (RAG)** | Ask questions about your chats — answered by a local Ollama LLM |
+| 📝 **AI summaries** | Per-contact conversation summaries via Ollama or OpenAI |
 
 ---
 
@@ -337,6 +341,129 @@ Make sure you installed dependencies with `pip install -r requirements.txt`. On 
 
 ### Translation is slow or not appearing (`--translate`)
 Translation requires an active internet connection and calls Google Translate's unofficial API. On the first run every Chinese message is sent for translation — this can take a few minutes for large chats. Subsequent runs use the local `translation_cache.json` cache and finish instantly. If translations look wrong, delete `translation_cache.json` and re-run.
+
+### Ollama model not found (`ai_search.py ask` / `summarize.py`)
+Make sure Ollama is installed and running, and the model is pulled. Example: `ollama pull llama3.2`. Then retry.
+
+---
+
+## 🤖 AI & Analytics
+
+Three new tools sit on top of the exported data and require no changes to the core export pipeline.
+
+---
+
+### 📊 Analytics Dashboard (`analytics.py`)
+
+Generates `export/analytics.html` — a full-page Chart.js dashboard with:
+
+- **Activity heatmap** — GitHub-style grid showing messages per day for the last 365 days
+- **Top contacts** — horizontal bar chart ranked by message count
+- **Hourly activity** — bar chart showing which hours of day you message most
+- **Day-of-week breakdown** — which days are busiest
+- **Message volume timeline** — daily message counts over the past year
+- **Media breakdown** — images, voice, video, stickers, and files per type
+- **Word cloud** — most frequent words across English messages
+
+```bash
+python analytics.py
+```
+
+Open `export/analytics.html` in your browser. Linked from the main dashboard header.
+
+```bash
+python analytics.py --top 20      # show top 20 contacts instead of 15
+python analytics.py --json        # also write export/analytics.json (raw data)
+```
+
+**Requirements:** `numpy`, `jinja2` (already included in `requirements.txt`)
+
+---
+
+### 🔎 Semantic Search + AI Q&A (`ai_search.py`)
+
+Embeds all plain-text messages as vectors locally using `sentence-transformers`. Lets you search in natural language and ask questions answered by a local LLM.
+
+**Step 1 — Build the index (one time, ~5 min for large archives):**
+
+```bash
+python ai_search.py build
+```
+
+Downloads the `all-MiniLM-L6-v2` embedding model (~90 MB) on first run. Saves vectors to `embeddings.db`.
+
+**Step 2 — Search:**
+
+```bash
+python ai_search.py search "Japan trip plans"
+python ai_search.py search "birthday gift ideas" --contact "Alice"
+python ai_search.py search "restaurant recommendation" --top 15
+```
+
+Returns messages ranked by semantic similarity — finds conceptually related messages even without exact keyword matches.
+
+**Step 3 — Ask a question (RAG with Ollama):**
+
+```bash
+python ai_search.py ask "What gifts did Alice say she wanted?"
+python ai_search.py ask "When did we plan to meet in Shanghai?" --contact "Bob"
+python ai_search.py ask "Summarise what we discussed about the project" --model mistral
+```
+
+Requires [Ollama](https://ollama.com) installed and running with a pulled model (`ollama pull llama3.2`).
+
+**Requirements:** `sentence-transformers`, `numpy`, `ollama`
+
+---
+
+### 📝 AI Conversation Summaries (`summarize.py`)
+
+Generates concise bullet-point summaries of entire conversations. Works locally via Ollama or via the OpenAI API.
+
+```bash
+# Summarise one contact
+python summarize.py --contact "Alice"
+
+# Limit to a specific month
+python summarize.py --contact "Work Group" --month 2024-06
+
+# Summarise all contacts (skips contacts with < 20 messages)
+python summarize.py --all
+
+# Use OpenAI GPT-4o instead of Ollama (requires OPENAI_API_KEY env var)
+python summarize.py --all --openai
+
+# Specify a different Ollama model
+python summarize.py --contact "Alice" --model mistral
+```
+
+Summaries are saved to `export/summaries/<contact>.html` with a browsable index at `export/summaries/index.html`. Linked from the main dashboard header.
+
+**Requirements:** `ollama` (local) or `openai` (cloud, set `OPENAI_API_KEY`)
+
+---
+
+### 🗂️ Updated Project Structure
+
+```
+wechat-extract-ai/
+│
+├── setup_config.py        ← Step 1 — config wizard
+├── key_finder.py          ← Step 2 — extract encryption key
+├── decryptor.py           ← Step 3 — decrypt databases
+├── exporter.py            ← Step 4 — export chats to HTML
+│
+├── analytics.py           ← NEW — generate analytics dashboard
+├── ai_search.py           ← NEW — semantic search + RAG Q&A
+├── summarize.py           ← NEW — AI conversation summaries
+│
+├── templates/
+│   ├── dashboard.html
+│   ├── chat.html
+│   └── analytics.html     ← NEW — analytics template
+│
+└── embeddings.db          ← generated by ai_search.py build (gitignored)
+```
 
 ---
 
