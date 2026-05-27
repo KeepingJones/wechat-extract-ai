@@ -31,6 +31,11 @@ A Python tool that **decrypts WeChat PC (Windows) databases** and exports every 
 | 📎 **File attachments** | Download buttons for any sent/received documents |
 | 🔗 **Link previews** | Renders shared article cards with title and URL |
 | 🎭 **Custom stickers** | Downloads and renders animated GIF/WebP stickers from WeChat CDN |
+| 😊 **Emoticon decoding** | Converts ~90 WeChat bracketed codes (e.g. `[微笑]`) to real emoji |
+| 🌏 **Auto-translation** | `--translate` flag renders Chinese messages with English translation inline |
+| 📍 **Location messages** | Displays place name with a clickable Google Maps link |
+| 💬 **Quoted replies** | Shows the referenced message above the reply |
+| 📞 **Call records** | Voice and video call entries with duration |
 | 🌐 **Dashboard** | A main `index.html` listing all conversations with message counts |
 | 🔍 **Live search** | In-page search that highlights matching messages in real time |
 | 📅 **Date dividers** | Messages grouped by date for easy reading |
@@ -226,10 +231,19 @@ python exporter.py --since 2024-01-01 --until 2024-12-31
 python exporter.py --incremental
 ```
 
+### Auto-translate Chinese messages to English
+
+```bash
+python exporter.py --translate
+```
+
+Messages detected as Chinese are sent to Google Translate (free, no API key) and displayed with an English translation inline. Results are cached in `translation_cache.json` so re-runs skip already-translated messages. Set `voice_language: ""` to disable voice transcription independently.
+
 ### Combine options
 
 ```bash
 python exporter.py --contact "Work Group" --since 2025-01-01 --incremental
+python exporter.py --contact "Alice" --translate
 ```
 
 ---
@@ -242,6 +256,7 @@ python exporter.py --contact "Work Group" --since 2025-01-01 --incremental
 - `decrypted/` and `export/` are also gitignored — your data stays on your machine only
 - The key extracted by `key_finder.py` is unique to your WeChat install and machine
 - Voice transcription uses Google's free Speech Recognition API (internet required). Results are cached locally in `transcription_cache.json` after the first run. Set `voice_language: ""` to disable
+- Auto-translation (`--translate`) uses Google Translate's unofficial free endpoint — no API key, no account. Results are cached in `translation_cache.json` and never sent back to any server after caching. Both cache files are gitignored
 
 ---
 
@@ -265,17 +280,20 @@ Messages are stored in `Msg_<MD5(username)>` tables spread across multiple `mess
 
 ### Message Type Reference
 
-| Type | Content | How it's handled |
-|---|---|---|
-| `1` | Plain text | Rendered as-is |
-| `3` | Image | `.dat` file decrypted (XOR or AES-ECB), displayed inline |
-| `34` | Voice message | SILK V3 decoded → WAV, embedded player + Google transcription |
-| `43` | Video | MP4 embedded with native `<video>` player |
-| `47` | Custom sticker | XML parsed → CDN URL fetched → GIF/PNG/WebP cached locally |
-| `48` | Location share | Label and coordinates displayed |
-| `49` | App message | Link cards, file downloads, quoted replies, WeChat Pay receipts |
-| `50` | Voice / video call | Call type and duration displayed |
-| `10000` | System notification | Shown as a system event row |
+| Type | Sub-type | Content | How it's handled |
+|---|---|---|---|
+| `1` | — | Plain text | Emoticon codes decoded, optional Chinese→English translation |
+| `3` | — | Image | `.dat` file decrypted (XOR or AES-ECB), displayed inline |
+| `34` | — | Voice message | SILK V3 decoded → WAV, embedded player + Google transcription |
+| `43` | — | Video | MP4 embedded with native `<video>` player |
+| `47` | — | Custom sticker | XML parsed → CDN URL fetched → GIF/PNG/WebP cached locally |
+| `48` | — | Location share | Place name + coordinates displayed with Google Maps link |
+| `49` | `5` | Link card | Article title and URL rendered as a preview card |
+| `49` | `6` | File attachment | Download button linking to the saved file |
+| `49` | `57` | Quoted reply | Referenced message shown above the reply |
+| `49` | `2000` | WeChat Pay | Transfer/receipt shown as a system note |
+| `50` | — | Voice / video call | Call type and duration displayed |
+| `10000` | — | System notification | Shown as a system event row |
 
 ### Image Decryption (`.dat` files)
 
@@ -316,6 +334,9 @@ WeChat CDN links expire. Failed downloads are cached in `failed_stickers.json`. 
 
 ### `pilk` not found / SILK decode fails
 Make sure you installed dependencies with `pip install -r requirements.txt`. On some systems you may also need the Visual C++ build tools: [download here](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+
+### Translation is slow or not appearing (`--translate`)
+Translation requires an active internet connection and calls Google Translate's unofficial API. On the first run every Chinese message is sent for translation — this can take a few minutes for large chats. Subsequent runs use the local `translation_cache.json` cache and finish instantly. If translations look wrong, delete `translation_cache.json` and re-run.
 
 ---
 
