@@ -1,3 +1,29 @@
+"""
+decryptor.py — WeChat SQLCipher Database Decryptor
+====================================================
+Decrypts WeChat PC message databases from SQLCipher format into
+standard SQLite files that can be opened with any SQLite browser.
+
+How it works:
+    WeChat uses SQLCipher with AES-256-CBC encryption, applied one 4096-byte
+    page at a time. Each page has a 16-byte IV stored in a reserved region at
+    the end of the page. Page 1 also contains a 16-byte salt prefix that is
+    part of the standard SQLite header after decryption.
+
+    The script tries both SQLCipher 3 (48-byte reserve) and SQLCipher 4
+    (80-byte reserve) until the decrypted page header matches the expected
+    SQLite page-size marker (0x1000).
+
+Prerequisites:
+    - Run key_finder.py first to populate config.json with the encryption key
+
+Output:
+    Decrypted .db files written to ./decrypted/, flattened from the
+    db_storage directory structure (subdirectory separators replaced with _).
+
+Usage:
+    python decryptor.py
+"""
 import os
 import sys
 import json

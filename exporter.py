@@ -1,3 +1,32 @@
+"""
+exporter.py — WeChat Chat Exporter
+===================================
+Parses decrypted WeChat PC SQLite databases and renders every conversation
+as a self-contained HTML file (plus plain-text mirrors).
+
+Usage:
+    python exporter.py                          # Export all chats
+    python exporter.py --contact "Alice"        # One contact (substring match)
+    python exporter.py --since 2024-01-01       # Messages on/after date
+    python exporter.py --until 2024-12-31       # Messages on/before date
+    python exporter.py --incremental            # Skip already-exported chats
+
+Prerequisites:
+    1. Run key_finder.py  (extracts encryption key from WeChat process memory)
+    2. Run decryptor.py   (decrypts SQLCipher databases to ./decrypted/)
+    3. Run this script    (renders HTML to the output_dir in config.json)
+
+Supported message types:
+    1     Plain text
+    3     Image (.dat files, XOR / AES-ECB decryption)
+    34    Voice message (SILK → WAV, Google Speech transcription)
+    43    Video
+    47    Custom sticker (CDN download, GIF / PNG / WebP)
+    48    Location
+    49    App messages: link cards, file attachments, quoted replies, payments
+    50    Voice / video call
+    10000 System notifications
+"""
 import os
 import html
 import re

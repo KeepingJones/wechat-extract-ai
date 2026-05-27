@@ -1,3 +1,28 @@
+"""
+key_finder.py — WeChat Database Key Extractor
+==============================================
+Scans the live WeChat PC process memory to extract the SQLCipher
+encryption key used to protect WeChat's message databases.
+
+How it works:
+    WeChat holds the 32-byte AES key as a hex string in its heap memory.
+    This script uses Windows APIs (ReadProcessMemory, VirtualQueryEx) to
+    scan all committed memory regions for hex patterns, then validates each
+    candidate by attempting to decrypt the first page of a real database.
+
+Requirements:
+    - Must be run on Windows
+    - WeChat PC must be open and the user must be logged in
+    - Run as Administrator (right-click terminal → 'Run as administrator')
+    - 'wechat_db_dir' must be set in config.json (run setup_config.py first)
+
+Output:
+    Writes the verified key(s) into config.json under 'key' and
+    'candidate_keys'. Run decryptor.py next.
+
+Usage:
+    python key_finder.py
+"""
 import os
 import re
 import sys

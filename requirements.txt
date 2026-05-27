@@ -1,2 +1,5 @@
 pycryptodome
 jinja2
+zstandard
+pilk
+SpeechRecognition
