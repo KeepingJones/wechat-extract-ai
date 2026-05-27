@@ -9,7 +9,8 @@ SpeechRecognition
 numpy
 
 # AI search (semantic search + RAG)
-sentence-transformers
+# Pin to 3.x — v5.x has a bug loading text-only models on Windows
+sentence-transformers==3.4.1
 
 # AI summaries — install one or both:
 ollama          # local LLM via Ollama (https://ollama.com)
