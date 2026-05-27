@@ -2,7 +2,7 @@
 
 ![WeChat Chat Exporter](docs/banner.png)
 
-# WeChat Chat Exporter 🗂️
+# WeChat Chat Exporter
 
 **Decrypt · Export · Archive your WeChat PC chat history**
 
@@ -14,9 +14,8 @@
 
 A Python tool that **decrypts WeChat PC (Windows) databases** and exports every conversation into a beautiful, self-contained HTML file — complete with images, voice messages, videos, file attachments, and animated custom stickers.
 
-> **Platform:** Windows only (key extraction uses the Windows API)  
-> **WeChat:** PC / Desktop version (not mobile)
-
+> **Platform:** Windows 10 / 11 only — the key extraction step uses the Windows memory API  
+> **WeChat:** PC / Desktop version only (not the mobile app)
 
 ---
 
@@ -26,166 +25,182 @@ A Python tool that **decrypts WeChat PC (Windows) databases** and exports every 
 |---|---|
 | 🔓 **Key extraction** | Reads WeChat's encryption key directly from process memory |
 | 💬 **Full chat export** | Every conversation exported as a standalone HTML page |
-| 🖼️ **Images** | Decrypts WeChat's `.dat` format (XOR / AES-ECB) and embeds images inline |
-| 🎙️ **Voice messages** | Decodes SILK audio → WAV, embeds a playback widget + transcription |
-| 📹 **Videos** | Embeds MP4 video messages with playback controls |
+| 🖼️ **Images** | Decrypts WeChat's `.dat` image format (XOR / AES-ECB) and embeds inline |
+| 🎙️ **Voice messages** | Decodes SILK audio → WAV, embeds a playback widget + optional transcription |
+| 📹 **Videos** | Embeds MP4 video messages with native playback controls |
 | 📎 **File attachments** | Download buttons for any sent/received documents |
 | 🔗 **Link previews** | Renders shared article cards with title and URL |
 | 🎭 **Custom stickers** | Downloads and renders animated GIF/WebP stickers from WeChat CDN |
-| 🌐 **Dashboard** | A main `index.html` listing all conversations |
-| 🔍 **Search** | Live in-page search that highlights matching messages |
+| 🌐 **Dashboard** | A main `index.html` listing all conversations with message counts |
+| 🔍 **Live search** | In-page search that highlights matching messages in real time |
 | 📅 **Date dividers** | Messages grouped by date for easy reading |
-| ⚡ **Filtering** | Export only certain contacts, or a specific date range |
+| ⚡ **CLI filters** | Export a specific contact, date range, or use incremental mode |
 
 ---
 
 ## 📋 Requirements
 
-- **Windows 10 / 11**
-- **Python 3.9+** ([download](https://www.python.org/downloads/))
-- **WeChat PC** installed, with at least one chat history on disk
-- **Administrator rights** for the key extraction step only
+- **Windows 10 or 11**
+- **Python 3.9+** — [download here](https://www.python.org/downloads/)
+- **WeChat PC** — installed and with chat history stored on disk
+- **Administrator rights** — only needed for the key extraction step
 
 ---
 
 ## 🚀 Quick Start
 
-### 1 — Clone or download the project
+### Step 1 — Get the project
 
-```
+```bash
 git clone https://github.com/KeepingJones/wechat-extract-ai.git
 cd wechat-extract-ai
 ```
 
-Or download and extract the ZIP from the GitHub page.
+Or click **Code → Download ZIP** on the GitHub page and extract it.
 
-### 2 — Install Python dependencies
+### Step 2 — Install dependencies
 
-```
+```bash
 pip install -r requirements.txt
 ```
 
 <details>
-<summary>What gets installed?</summary>
+<summary>📦 What gets installed?</summary>
 
-| Package | Used for |
+| Package | Purpose |
 |---|---|
-| `pycryptodome` | AES decryption for `.dat` image files |
+| `pycryptodome` | AES decryption of `.dat` image files |
 | `jinja2` | HTML template rendering |
-| `zstandard` | Decompressing zstd-compressed message content |
-| `pilk` | SILK audio codec → WAV (voice messages) |
-| `SpeechRecognition` | Voice transcription via Google Speech API |
+| `zstandard` | Decompresses zstd-compressed message payloads |
+| `pilk` | Decodes SILK V3 audio (voice messages) → WAV |
+| `SpeechRecognition` | Voice message transcription via Google Speech API |
 
 </details>
 
-### 3 — Run the setup wizard
+### Step 3 — Run the setup wizard
 
-```
+```bash
 python setup_config.py
 ```
 
-This will:
-- Auto-detect your WeChat data folder
-- Ask a few simple questions
-- Write `config.json` for you
+This interactively:
+- Auto-detects your WeChat data folder
+- Asks for output location and language preference
+- Writes `config.json` ready for the next steps
 
-### 4 — Extract the encryption key
+### Step 4 — Extract the encryption key
 
-**Open WeChat and log in first**, then run (as Administrator):
+Make sure **WeChat is open and you are logged in**, then run this **as Administrator**:
 
-```
+```bash
 python key_finder.py
 ```
 
-Right-click your terminal → *Run as administrator*, then run the command above.  
-The key is saved automatically into `config.json`.
+> **How to run as Administrator:** Right-click Command Prompt or PowerShell → *Run as administrator*, then run the command.
 
-### 5 — Decrypt the databases
+The encryption key is found automatically and saved to `config.json`.
 
-```
+### Step 5 — Decrypt the databases
+
+```bash
 python decryptor.py
 ```
 
-Decrypted `.db` files are written to the `decrypted/` folder (ignored by git).
+Decrypted SQLite files are written to the `decrypted/` folder.
 
-### 6 — Export chats to HTML
+### Step 6 — Export chats to HTML
 
-```
+```bash
 python exporter.py
 ```
 
-Then open `export/index.html` in any web browser. Done! 🎉
+Open `export/index.html` in any web browser. Done! 🎉
 
 ---
 
 ## 🗂️ Project Structure
 
 ```
-wechat-exporter/
+wechat-extract-ai/
+│
 ├── setup_config.py        ← START HERE — interactive config wizard
-├── key_finder.py          ← Step 2 — extracts the database key from memory
-├── decryptor.py           ← Step 3 — decrypts WeChat SQLCipher databases
+├── key_finder.py          ← Step 2 — extracts the database encryption key
+├── decryptor.py           ← Step 3 — decrypts SQLCipher databases
 ├── exporter.py            ← Step 4 — parses messages and renders HTML
 │
 ├── templates/
 │   ├── dashboard.html     ← Jinja2 template for the contacts dashboard
 │   └── chat.html          ← Jinja2 template for individual chat pages
 │
-├── config.json            ← Your config (auto-generated, NOT committed)
-├── config.example.json    ← Template showing the config structure
-├── requirements.txt       ← Python dependencies
+├── docs/
+│   └── banner.png         ← README header image
 │
-└── export/                ← Output (gitignored)
-    ├── index.html         ← Main dashboard — open this in your browser
-    ├── html/              ← Individual chat HTML files
-    ├── image/             ← Decrypted images
-    ├── voice/             ← Decoded voice WAV files
-    ├── video/             ← Video files
-    ├── file/              ← Document attachments
-    └── sticker/           ← Downloaded custom sticker images
+├── tools/                 ← Developer inspection scripts (not needed for normal use)
+│   └── README.md          ← Describes each tool
+│
+├── config.json            ← Your local config — auto-generated, NOT committed to git
+├── config.example.json    ← Safe template showing the config structure
+├── requirements.txt       ← Python dependencies
+├── LICENSE
+└── README.md
+```
+
+Generated output (gitignored, stays on your machine):
+
+```
+export/
+├── index.html         ← Main dashboard — open this in your browser
+├── html/              ← One HTML file per conversation
+├── image/             ← Decrypted images
+├── voice/             ← Decoded voice WAV files
+├── video/             ← Video files
+├── file/              ← Document attachments
+└── sticker/           ← Downloaded custom sticker images
 ```
 
 ---
 
-## ⚙️ Configuration Reference (`config.json`)
+## ⚙️ Configuration Reference
 
-The setup wizard creates this for you, but here are all the fields:
+`config.json` is created by `setup_config.py`. You can also edit it manually:
 
 ```json
 {
-  "wechat_db_dir": "C:/Users/YOU/OneDrive/Documents/xwechat_files/wxid_XXXX/db_storage",
-  "output_dir":    "C:/path/to/wechat-exporter/export",
+  "wechat_db_dir":  "C:/Users/YOU/OneDrive/Documents/xwechat_files/wxid_XXXX/db_storage",
+  "output_dir":     "C:/Users/YOU/wechat-extract-ai/export",
   "voice_language": "en-US",
-  "key":            "automatically filled by key_finder.py",
-  "candidate_keys": ["automatically filled by key_finder.py"],
-  "image_aes_key":  "automatically filled by key_finder.py",
+  "key":            "← filled automatically by key_finder.py",
+  "candidate_keys": ["← filled automatically by key_finder.py"],
+  "image_aes_key":  "← filled automatically by key_finder.py",
   "image_xor_key":  25
 }
 ```
 
-| Field | Description |
-|---|---|
-| `wechat_db_dir` | Path to WeChat's `db_storage` folder |
-| `output_dir` | Where exported files are written (defaults to `./export`) |
-| `voice_language` | BCP-47 speech language tag (see table below) |
-| `key` | 64-char hex SQLCipher key — filled by `key_finder.py` |
-| `candidate_keys` | All keys found by `key_finder.py` (usually just one) |
-| `image_aes_key` | AES key for V2 `.dat` image decryption |
-| `image_xor_key` | XOR byte for image decryption (usually `25` on PC) |
+| Field | Required | Description |
+|---|---|---|
+| `wechat_db_dir` | ✅ | Full path to WeChat's `db_storage` folder |
+| `output_dir` | ✅ | Where exported HTML and media are written |
+| `voice_language` | ✅ | BCP-47 language code for speech recognition (see below) |
+| `key` | Auto | 64-char hex SQLCipher key — set by `key_finder.py` |
+| `candidate_keys` | Auto | All keys found by `key_finder.py` (usually just one) |
+| `image_aes_key` | Auto | AES key for V2 `.dat` image decryption |
+| `image_xor_key` | Auto | XOR byte for image decryption (typically `25` on WeChat PC) |
 
-### Voice Language Options
+### Voice Language Codes
 
-| Tag | Language |
+| Code | Language |
 |---|---|
 | `en-US` | English (United States) |
 | `en-GB` | English (United Kingdom) |
-| `zh-CN` | Mandarin Chinese (Simplified) |
-| `zh-TW` | Mandarin Chinese (Traditional) |
+| `zh-CN` | Mandarin Chinese — Simplified |
+| `zh-TW` | Mandarin Chinese — Traditional |
 | `ja-JP` | Japanese |
 | `ko-KR` | Korean |
 | `fr-FR` | French |
 | `de-DE` | German |
-| `es-ES` | Spanish |
+| `es-ES` | Spanish (Spain) |
+
+Set `voice_language` to `""` to skip transcription entirely.
 
 ---
 
@@ -193,25 +208,27 @@ The setup wizard creates this for you, but here are all the fields:
 
 ### Export a single contact
 
-```
+```bash
 python exporter.py --contact "Alice"
 ```
 
-### Export messages in a date range
+Matches any contact whose name or WeChat ID contains "Alice" (case-insensitive).
 
-```
+### Export a date range
+
+```bash
 python exporter.py --since 2024-01-01 --until 2024-12-31
 ```
 
-### Skip already-exported chats (incremental mode)
+### Incremental mode — skip already-exported chats
 
-```
+```bash
 python exporter.py --incremental
 ```
 
-### Combine filters
+### Combine options
 
-```
+```bash
 python exporter.py --contact "Work Group" --since 2025-01-01 --incremental
 ```
 
@@ -219,87 +236,98 @@ python exporter.py --contact "Work Group" --since 2025-01-01 --incremental
 
 ## 🔐 Privacy & Security
 
-> ⚠️ Your exported chats contain private messages and personal media.
+> ⚠️ **Exported chat histories contain private messages and personal media. Keep them local.**
 
-- `config.json` is in `.gitignore` — **never commit it** as it contains your encryption key
-- `decrypted/` and `export/` are also gitignored — your messages stay local
-- The encryption key extracted by `key_finder.py` is unique to your machine and WeChat install
-- Transcription uses Google's free Speech Recognition API over the internet — if you prefer offline transcription, set `voice_language` to an empty string (`""`) to disable it
+- `config.json` is listed in `.gitignore` — **never commit it**, as it contains your encryption key
+- `decrypted/` and `export/` are also gitignored — your data stays on your machine only
+- The key extracted by `key_finder.py` is unique to your WeChat install and machine
+- Voice transcription uses Google's free Speech Recognition API (internet required). Results are cached locally in `transcription_cache.json` after the first run. Set `voice_language: ""` to disable
 
 ---
 
 ## 🛠️ How It Works
 
-### Key Extraction (`key_finder.py`)
-WeChat PC stores the SQLCipher key in process memory. This script uses the Windows API (`ReadProcessMemory`, `VirtualQueryEx`) to scan WeChat's address space for 32-byte hex patterns and verifies each candidate against an actual database page.
+### 1. Key Extraction (`key_finder.py`)
 
-### Database Decryption (`decryptor.py`)
-WeChat uses SQLCipher with AES-256-CBC encryption, one page at a time (4096 bytes). Each page has a 16-byte IV stored in the reserved space at the end. The decryptor reconstructs standard SQLite files.
+WeChat PC stores the 32-byte SQLCipher key as a hex string in heap memory. The script uses Windows APIs (`ReadProcessMemory`, `VirtualQueryEx`) to scan WeChat's address space for 64-character hex patterns and verifies each candidate by attempting to AES-decrypt the first 4096-byte page of a real database.
 
-### Message Parsing (`exporter.py`)
-Messages live in `Msg_<MD5(username)>` tables across multiple `message_*.db` files. The exporter:
-1. Loads contact names from `contact_contact.db`
-2. Scans all `message_message_*.db` databases
-3. Decodes each message based on its type number
+### 2. Database Decryption (`decryptor.py`)
+
+WeChat uses **SQLCipher** with AES-256-CBC encryption applied one page at a time (4096 bytes per page). Each page stores a 16-byte IV in a reserved region at its end. Page 1 also has a 16-byte random salt prefix. The script tries both SQLCipher 3 (48-byte reserve) and SQLCipher 4 (80-byte reserve) automatically, then writes standard unencrypted SQLite files.
+
+### 3. Message Parsing (`exporter.py`)
+
+Messages are stored in `Msg_<MD5(username)>` tables spread across multiple `message_message_*.db` files. The exporter:
+
+1. Loads contact display names from `contact_contact.db`
+2. Discovers all `Msg_*` tables across all message databases
+3. Decodes every message according to its type number
 
 ### Message Type Reference
 
-| Type | Content |
-|---|---|
-| `1` | Plain text |
-| `3` | Image (`.dat` file, XOR or AES encrypted) |
-| `34` | Voice (SILK encoded, decoded to WAV) |
-| `43` | Video |
-| `47` | Custom sticker (XML → CDN URL → downloaded GIF/PNG/WebP) |
-| `48` | Location |
-| `49` | App message: link card, file attachment, payment, quoted reply |
-| `50` | Voice/video call |
-| `10000` | System notification |
+| Type | Content | How it's handled |
+|---|---|---|
+| `1` | Plain text | Rendered as-is |
+| `3` | Image | `.dat` file decrypted (XOR or AES-ECB), displayed inline |
+| `34` | Voice message | SILK V3 decoded → WAV, embedded player + Google transcription |
+| `43` | Video | MP4 embedded with native `<video>` player |
+| `47` | Custom sticker | XML parsed → CDN URL fetched → GIF/PNG/WebP cached locally |
+| `48` | Location share | Label and coordinates displayed |
+| `49` | App message | Link cards, file downloads, quoted replies, WeChat Pay receipts |
+| `50` | Voice / video call | Call type and duration displayed |
+| `10000` | System notification | Shown as a system event row |
 
-### Image Decryption
-WeChat encodes images as `.dat` files in two formats:
-- **V1**: Single XOR key (`cfcd208495d565ef`) applied to the entire file
-- **V2**: AES-ECB encrypted header + XOR tail (key extracted alongside the DB key)
+### Image Decryption (`.dat` files)
+
+WeChat stores images as `.dat` files in one of two formats:
+
+- **V1** — XOR with the fixed key `cfcd208495d565ef` byte-by-byte
+- **V2** — AES-ECB encrypted header + XOR tail (keys extracted from memory by `key_finder.py`)
 
 ### Voice Messages
-Voice is encoded in SILK V3 format. `pilk` decodes SILK → PCM, which is wrapped in a WAV container. Google Speech Recognition transcribes the content (responses cached in `transcription_cache.json`).
+
+Audio is stored in **SILK V3** format. `pilk` decodes SILK → raw PCM, which is wrapped into a standard WAV container. Google Speech Recognition is then used to transcribe the content. All successful transcriptions are saved to `transcription_cache.json` so they are not re-fetched on subsequent runs.
 
 ### Custom Stickers
-Sticker messages contain zstd-compressed XML with an `<emoji>` element holding the CDN URL and MD5. The exporter fetches from WeChat's CDN, detects the format, and caches locally. Failed CDN downloads (expired URLs) are recorded in `failed_stickers.json` to skip them on future runs.
+
+Sticker message content is zstd-compressed XML containing an `<emoji>` element with the sticker's CDN URL and MD5 hash. The exporter downloads the image, detects its format (GIF / PNG / WebP / JPG), saves it to `export/sticker/<md5>.<ext>`, and references it in the HTML. CDN links for older stickers may return 400 errors — these failures are cached in `failed_stickers.json` to prevent retrying them on future runs.
 
 ---
 
 ## ❓ Troubleshooting
 
-### "Access Denied" when running key_finder.py
-→ Run your terminal **as Administrator**: right-click Terminal or PowerShell → *Run as administrator*
+### "Access Denied" when running `key_finder.py`
+Right-click your terminal → **Run as administrator**, then try again.
 
 ### "WeChat/Weixin process not found"
-→ Make sure WeChat is open **and you are logged in** before running `key_finder.py`
+WeChat must be **open and logged in** when you run `key_finder.py`. Start WeChat, log in, then run the script.
 
 ### "Decrypted contact database not found"
-→ Run `python decryptor.py` before `exporter.py`
+Run `python decryptor.py` before `python exporter.py`.
 
-### Images show as broken / missing
-→ The `image_aes_key` and `image_xor_key` in `config.json` may need to be updated. These vary by WeChat version. Try re-running `key_finder.py` if you recently updated WeChat.
+### Images are broken or missing
+The `image_aes_key` / `image_xor_key` in `config.json` may be stale after a WeChat update. Re-run `python key_finder.py` to refresh them, then re-run `python decryptor.py` and `python exporter.py`.
 
 ### Voice messages have no transcription
-→ The file is still decoded and playable — transcription requires an internet connection and uses Google's API, which may be rate-limited. Transcriptions are cached after the first successful run.
+The WAV file is still playable — transcription requires an active internet connection and uses Google's Speech API, which can occasionally be rate-limited. Delete `transcription_cache.json` and re-run to retry failed entries.
 
-### Stickers don't appear
-→ WeChat CDN links expire. If a sticker fails to download, it's recorded in `failed_stickers.json`. Delete this file to retry all failed stickers on next run.
+### Stickers are missing
+WeChat CDN links expire. Failed downloads are cached in `failed_stickers.json`. To retry them all, delete that file and re-run `python exporter.py`.
+
+### `pilk` not found / SILK decode fails
+Make sure you installed dependencies with `pip install -r requirements.txt`. On some systems you may also need the Visual C++ build tools: [download here](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
 ---
 
 ## 🤝 Contributing
 
-Pull requests welcome! Please:
-- Keep sensitive data (keys, personal exports) out of any PRs
-- Test changes against a real WeChat database if possible
-- Follow the existing code style
+Pull requests are welcome. Please:
+- Keep sensitive data (encryption keys, personal exports) out of any PRs
+- Test changes against a real WeChat database where possible
+- Follow the existing code style (PEP 8, descriptive function names)
 
 ---
 
 ## ⚠️ Disclaimer
 
-This tool is for **personal use only** — to backup and read your own WeChat conversations. Do not use it to access other people's messages without their explicit consent. Use at your own risk and in accordance with WeChat's terms of service.
+This tool is intended for **personal use only** — to backup and read your own WeChat conversations. Do not use it to access another person's messages without their explicit consent. Use responsibly and at your own risk, in accordance with WeChat's terms of service.

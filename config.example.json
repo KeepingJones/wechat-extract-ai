@@ -1,11 +1,12 @@
 {
-  "wechat_db_dir": "C:/Users/YOUR_USERNAME/OneDrive/Documents/xwechat_files/wxid_XXXX_XXXX/db_storage",
-  "key": "YOUR_64_CHAR_HEX_DATABASE_KEY",
-  "output_dir": "C:/path/to/wechat-exporter/export",
-  "candidate_keys": [
-    "YOUR_64_CHAR_HEX_DATABASE_KEY"
-  ],
-  "image_aes_key": "YOUR_16_CHAR_AES_KEY",
-  "image_xor_key": 25,
-  "voice_language": "en-US"
+  "_comment": "Copy this file to config.json and fill in your values. Run setup_config.py to do this automatically.",
+
+  "wechat_db_dir": "C:/Users/YOUR_USERNAME/OneDrive/Documents/xwechat_files/wxid_XXXX/db_storage",
+  "output_dir": "C:/Users/YOUR_USERNAME/wechat-extract-ai/export",
+  "voice_language": "en-US",
+
+  "key": "",
+  "candidate_keys": [],
+  "image_aes_key": "",
+  "image_xor_key": 25
 }

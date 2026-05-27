@@ -24,9 +24,14 @@ failed_stickers.json
 venv/
 .venv/
 
-# VS Code
+
+# IDE and editor files
 .vscode/
+.idea/
 
 # Misc
 *.log
 *.tmp
+
+# Debug output text files
+tools/*.txt
