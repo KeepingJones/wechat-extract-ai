@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WeChat Chat Export Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #08090a;
+            --panel-bg: rgba(17, 19, 23, 0.75);
+            --card-bg: rgba(26, 29, 36, 0.5);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f2f5;
+            --text-secondary: #8e95a0;
+            --accent-color: #07c160; /* WeChat Green */
+            --accent-glow: rgba(7, 193, 96, 0.15);
+            --glass-blur: blur(24px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(7, 193, 96, 0.04) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.04) 0px, transparent 50%);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        header {
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(8, 9, 10, 0.6);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 100%;
+        }
+
+        .header-content {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #ffffff 30%, #a3aed0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-title p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 40px 24px;
+            display: grid;
+            grid-template-columns: 1fr 2.2fr;
+            gap: 32px;
+            flex: 1;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            height: fit-content;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value {
+            font-family: 'Outfit', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-value.accent {
+            color: var(--accent-color);
+            text-shadow: 0 0 10px rgba(7, 193, 96, 0.2);
+        }
+
+        .section-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Top Chats Chart list */
+        .chart-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .chart-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chart-labels {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            gap: 8px;
+        }
+
+        .chart-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .chart-val {
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        .chart-bar-bg {
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .chart-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-color), #3b82f6);
+            border-radius: 4px;
+            transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Directory Panel */
+        .directory-panel {
+            background: var(--panel-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            height: 75vh;
+        }
+
+        .search-container {
+            position: relative;
+        }
+
+        .search-container input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 14px 20px 14px 48px;
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .search-container input:focus {
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.06);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .search-container svg {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            fill: var(--text-secondary);
+            pointer-events: none;
+        }
+
+        .contact-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-right: 4px;
+        }
+
+        .contact-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            text-decoration: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .contact-card:hover {
+            transform: translateX(4px);
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(7, 193, 96, 0.4);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .contact-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0; /* allows text truncation */
+        }
+
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 16px;
+            color: white;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .contact-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        .contact-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .contact-preview {
+            font-size: 12px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .contact-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .msg-count-badge {
+            background: var(--accent-color);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(7, 193, 96, 0.3);
+        }
+
+        .last-time {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        .empty-results {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+            display: none;
+        }
+
+        @media (max-width: 1024px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            .directory-panel {
+                height: 60vh;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="header-title">
+                <h1>WeChat Chat Log Hub</h1>
+                <p>Interactive dashboard for decoded chat histories</p>
+            </div>
+            <div class="header-right">
+                <span class="msg-count-badge" style="background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border: 1px solid var(--border-color); font-weight: 500;">
+                    Export Generated: {{ export_date }}
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Sidebar Statistics Panel -->
+        <div class="panel">
+            <div class="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Overview Statistics
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-label">Total Messages</span>
+                    <span class="stat-value accent">{{ total_messages }}</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Active Chats</span>
+                    <span class="stat-value">{{ active_chats }}</span>
+                </div>
+            </div>
+
+            <div class="section-title" style="margin-top: 12px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                </svg>
+                Top Conversations
+            </div>
+
+            <div class="chart-list">
+                {% for contact in top_contacts %}
+                    <div class="chart-item">
+                        <div class="chart-labels">
+                            <span class="chart-name">{{ contact.name }}</span>
+                            <span class="chart-val">{{ contact.count }} messages</span>
+                        </div>
+                        <div class="chart-bar-bg">
+                            <div class="chart-bar-fill" style="width: {{ contact.percentage }}%"></div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Chat Directory Panel -->
+        <div class="directory-panel">
+            <div class="search-container">
+                <svg viewBox="0 0 24 24">
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+                <input type="text" id="contactSearch" placeholder="Search contacts by name, remark, or ID...">
+            </div>
+
+            <div class="contact-list" id="contactList">
+                {% for contact in contacts %}
+                    <a href="{{ contact.html_filename }}" class="contact-card" data-name="{{ contact.name|lower }}" data-remark="{{ contact.remark|lower }}" data-username="{{ contact.username|lower }}">
+                        <div class="contact-left">
+                            <div class="avatar" style="background: {{ contact.avatar_color }}">{{ contact.initial }}</div>
+                            <div class="contact-info">
+                                <span class="contact-name">
+                                    {{ contact.name }}
+                                    {% if contact.remark %}
+                                        <span style="font-size: 12px; font-weight: normal; color: var(--text-secondary); margin-left: 6px;">({{ contact.remark }})</span>
+                                    {% endif %}
+                                </span>
+                                <span class="contact-preview">{{ contact.last_message_preview }}</span>
+                            </div>
+                        </div>
+                        <div class="contact-right">
+                            <span class="msg-count-badge">{{ contact.message_count }}</span>
+                            <span class="last-time">{{ contact.last_message_time }}</span>
+                        </div>
+                    </a>
+                {% endfor %}
+                <div class="empty-results" id="emptyResults">No matching contacts found</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const searchInput = document.getElementById('contactSearch');
+        const contactList = document.getElementById('contactList');
+        const emptyResults = document.getElementById('emptyResults');
+        const cards = contactList.querySelectorAll('.contact-card');
+
+        searchInput.addEventListener('input', function() {
+            const query = this.value.trim().toLowerCase();
+            let matchesCount = 0;
+
+            cards.forEach(card => {
+                const name = card.getAttribute('data-name');
+                const remark = card.getAttribute('data-remark');
+                const username = card.getAttribute('data-username');
+
+                if (name.includes(query) || remark.includes(query) || username.includes(query)) {
+                    card.style.display = '';
+                    matchesCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            if (matchesCount === 0) {
+                emptyResults.style.display = 'block';
+            } else {
+                emptyResults.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

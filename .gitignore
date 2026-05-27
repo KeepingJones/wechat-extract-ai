@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+
+# Decrypted databases (sensitive)
+decrypted/
+
+# Exported output (large, personal data)
+export/
+
+# Cache files
+transcription_cache.json
+failed_stickers.json
+
+# Virtual environments
+venv/
+.venv/
+
+# VS Code
+.vscode/
+
+# Misc
+*.log
+*.tmp

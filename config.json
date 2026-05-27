@@ -1,0 +1,14 @@
+{
+  "wechat_db_dir": "C:/Users/ewanj/OneDrive/Stuff/Documents/xwechat_files/wxid_y5jo8enhnvdu22_05d2/db_storage",
+  "key": "6d8d8da43475b226817b1e708b253885aad7e85d50e1012d9e5d3e24b4c82853",
+  "output_dir": "C:/Users/ewanj/wechat-exporter/export",
+  "candidate_keys": [
+    "6d8d8da43475b226817b1e708b253885aad7e85d50e1012d9e5d3e24b4c82853",
+    "c8f54b5dc10739c1d07702477df7a98c1be84c2f07786d8049e7c8202a03e332",
+    "bb58d5e87fa0b2c4dfb3f85cd8c5ecb305322960c5e3329b9d8cdca5de10a8fe",
+    "7c36b831f7a028ab28667c966292db5554bfb166b13ae979690c5cc801badc9a",
+    "4e2aedbdfe15012872421e3d8551a806a94e48ea80c764e7a1e1a7f395d4de5c"
+  ],
+  "image_aes_key": "06da4fb49fefacc8",
+  "image_xor_key": 25
+}
