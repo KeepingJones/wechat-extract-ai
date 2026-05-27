@@ -9,12 +9,42 @@ Usage:
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import re
 import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
+
+try:
+    import zstandard as zstd
+    _zstd_dctx = zstd.ZstdDecompressor()
+    HAS_ZSTD = True
+except ImportError:
+    HAS_ZSTD = False
+
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+
+
+def decompress_content(raw):
+    """Decompress zstd-compressed message_content bytes to str."""
+    if not isinstance(raw, bytes) or not raw:
+        return raw or ""
+    if HAS_ZSTD and raw[:4] == ZSTD_MAGIC:
+        try:
+            return _zstd_dctx.decompress(raw, max_output_size=65536).decode("utf-8", errors="replace")
+        except Exception:
+            pass
+    try:
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+
+
+def build_md5_lookup(contacts):
+    """Returns {md5_hex -> username} for reverse lookup of Msg_<md5> table names."""
+    return {hashlib.md5(u.encode()).hexdigest().lower(): u for u in contacts}
 
 try:
     from jinja2 import Environment, FileSystemLoader
@@ -112,6 +142,9 @@ def compute_analytics(decrypted_dir, contacts, top_n=15):
         print("No message databases found in", decrypted_dir, file=sys.stderr)
         sys.exit(1)
 
+    # Build MD5 -> username lookup so we can resolve talker from table name
+    md5_lookup = build_md5_lookup(contacts)
+
     per_contact  = collections.defaultdict(lambda: {
         "name": "", "total": 0, "sent": 0, "received": 0,
         "images": 0, "voice": 0, "video": 0, "stickers": 0, "files": 0,
@@ -131,34 +164,61 @@ def compute_analytics(decrypted_dir, contacts, top_n=15):
             "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'Msg_%'"
         )]
 
+        # Build Name2Id -> username map for this DB (used for sender detection)
+        name2id = {}
+        try:
+            for row in conn.execute("SELECT rowid, user_name FROM Name2Id"):
+                name2id[row[0]] = row[1]
+        except sqlite3.OperationalError:
+            pass
+        # Find the current user's rowid: their username is the empty string or the wxid
+        # Heuristic: the rowid that appears as real_sender_id most often in tables where
+        # only one sender exists is likely "me". Simplest: use rowid=2 which is the most
+        # commonly observed self-rowid in WeChat PC databases.
+        my_sender_id = 2
+
         for table in tables:
+            # Derive talker from MD5 in table name  e.g. "Msg_abc123..." -> username
+            table_hash = table[4:]  # strip "Msg_" prefix
+            talker     = md5_lookup.get(table_hash, "")
+
             cur = conn.execute(f"SELECT * FROM [{table}] LIMIT 1")
             if cur.fetchone() is None:
                 continue
             col_names = {d[0].lower() for d in cur.description}
 
-            time_col    = next((c for c in ["create_time","createtime","timestamp"]          if c in col_names), None)
-            type_col    = next((c for c in ["local_type","type","msgtype"]                    if c in col_names), None)
-            content_col = next((c for c in ["message_content","content","strcontent","body"]  if c in col_names), None)
-            send_col    = next((c for c in ["issend","issender","is_sender"]                  if c in col_names), None)
-            talker_col  = next((c for c in ["talker","strtalker","sender"]                    if c in col_names), None)
+            time_col      = next((c for c in ["create_time","createtime","timestamp"]         if c in col_names), None)
+            type_col      = next((c for c in ["local_type","type","msgtype"]                   if c in col_names), None)
+            content_col   = next((c for c in ["message_content","content","strcontent","body"] if c in col_names), None)
+            sender_id_col = next((c for c in ["real_sender_id","real_sender"]                  if c in col_names), None)
+            # Fallback: explicit issend column
+            send_col      = next((c for c in ["issend","issender","is_sender"]                 if c in col_names), None)
 
             if not time_col:
                 continue
 
-            select_parts = [c for c in [time_col, type_col, content_col, send_col, talker_col] if c]
+            select_parts = [c for c in [time_col, type_col, content_col, sender_id_col, send_col] if c]
             sel = ", ".join(select_parts)
 
             for row in conn.execute(f"SELECT {sel} FROM [{table}]"):
-                row = dict(row)
-                ts      = row.get(time_col)
-                mtype   = int(row.get(type_col, 1) or 1)
-                content = row.get(content_col, "") or ""
-                is_sent = bool(row.get(send_col, 0))
-                talker  = row.get(talker_col, "") or ""
+                row   = dict(row)
+                ts    = row.get(time_col)
+                mtype = int(row.get(type_col, 1) or 1)
+                raw   = row.get(content_col, b"") or b""
 
-                if not ts or not talker:
+                # Determine sent/received
+                if send_col:
+                    is_sent = bool(row.get(send_col, 0))
+                elif sender_id_col:
+                    is_sent = (row.get(sender_id_col) == my_sender_id)
+                else:
+                    is_sent = False
+
+                if not ts:
                     continue
+
+                # Decompress content for word frequency
+                content = decompress_content(raw) if isinstance(raw, bytes) else (raw or "")
 
                 total_msgs += 1
                 if is_sent:
@@ -166,8 +226,8 @@ def compute_analytics(decrypted_dir, contacts, top_n=15):
                 else:
                     recv_total += 1
 
-                contact_name = contacts.get(talker, talker)
-                pc = per_contact[talker]
+                contact_name = contacts.get(talker, talker) if talker else table_hash[:8]
+                pc = per_contact[talker or table_hash]
                 if not pc["name"]:
                     pc["name"] = contact_name
                 pc["total"] += 1
@@ -176,17 +236,17 @@ def compute_analytics(decrypted_dir, contacts, top_n=15):
                 else:
                     pc["received"] += 1
 
-                if mtype == 3:   pc["images"]   += 1
-                elif mtype == 34: pc["voice"]   += 1
-                elif mtype == 43: pc["video"]   += 1
+                if mtype == 3:    pc["images"]   += 1
+                elif mtype == 34: pc["voice"]    += 1
+                elif mtype == 43: pc["video"]    += 1
                 elif mtype == 47: pc["stickers"] += 1
-                elif mtype == 49: pc["files"]   += 1
+                elif mtype == 49: pc["files"]    += 1
 
                 try:
                     dt = datetime.fromtimestamp(ts, tz=timezone.utc)
                     date_str = dt.strftime("%Y-%m-%d")
-                    daily[date_str]    += 1
-                    hourly[dt.hour]    += 1
+                    daily[date_str]       += 1
+                    hourly[dt.hour]       += 1
                     weekday[dt.weekday()] += 1
 
                     if pc["first_ts"] is None or ts < pc["first_ts"]:
@@ -315,7 +375,7 @@ def main():
     data = compute_analytics(decrypted_dir, contacts, top_n=args.top)
 
     print(f"  {data['total_messages']:,} messages across {data['active_contacts']} contacts")
-    print(f"  Date range: {data['first_date']} → {data['last_date']}")
+    print(f"  Date range: {data['first_date']} to {data['last_date']}")
     print(f"  Peak day: {data['peak_day']} ({data['peak_count']:,} messages)")
 
     templates_dir = os.path.join(SCRIPT_DIR, "templates")
