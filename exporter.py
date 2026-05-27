@@ -10,6 +10,7 @@ Usage:
     python exporter.py --since 2024-01-01       # Messages on/after date
     python exporter.py --until 2024-12-31       # Messages on/before date
     python exporter.py --incremental            # Skip already-exported chats
+    python exporter.py --translate              # Auto-translate Chinese messages to English
 
 Prerequisites:
     1. Run key_finder.py  (extracts encryption key from WeChat process memory)
@@ -54,6 +55,72 @@ except ImportError:
     HAS_CRYPTO = False
 
 FAILED_STICKERS = set()
+
+WECHAT_EMOTICONS = {
+    '[微笑]': '😊', '[撇嘴]': '😏', '[色]': '😍', '[发呆]': '😳', '[得意]': '😏',
+    '[流泪]': '😢', '[害羞]': '😊', '[闭嘴]': '🤐', '[睡]': '😴', '[大哭]': '😭',
+    '[尴尬]': '😅', '[发怒]': '😠', '[调皮]': '😜', '[呲牙]': '😁', '[惊讶]': '😲',
+    '[难过]': '😔', '[囧]': '😳', '[抓狂]': '🤯', '[吐]': '🤮', '[偷笑]': '😄',
+    '[可爱]': '😍', '[白眼]': '🙄', '[傲慢]': '😤', '[饥饿]': '😋', '[困]': '😪',
+    '[惊恐]': '😱', '[流汗]': '😰', '[憨笑]': '😄', '[悠闲]': '😌', '[奋斗]': '💪',
+    '[咒骂]': '🤬', '[疑问]': '🤔', '[嘘]': '🤫', '[晕]': '😵', '[折磨]': '😖',
+    '[衰]': '😞', '[骷髅]': '💀', '[敲打]': '👊', '[再见]': '👋', '[擦汗]': '😅',
+    '[抠鼻]': '🤧', '[鼓掌]': '👏', '[糗大了]': '😅', '[坏笑]': '😏',
+    '[左哼哼]': '😤', '[右哼哼]': '😤', '[哈欠]': '🥱', '[鄙视]': '😒',
+    '[委屈]': '😢', '[快哭了]': '😢', '[阴险]': '😈', '[亲亲]': '😘', '[吓]': '😱',
+    '[可怜]': '🥺', '[菜刀]': '🔪', '[西瓜]': '🍉', '[啤酒]': '🍺', '[篮球]': '🏀',
+    '[乒乓]': '🏓', '[咖啡]': '☕', '[饭]': '🍚', '[猪头]': '🐷', '[玫瑰]': '🌹',
+    '[凋谢]': '🥀', '[嘴唇]': '💋', '[爱心]': '❤️', '[心碎]': '💔', '[蛋糕]': '🎂',
+    '[闪电]': '⚡', '[炸弹]': '💣', '[刀]': '🔪', '[足球]': '⚽', '[瓢虫]': '🐞',
+    '[便便]': '💩', '[月亮]': '🌙', '[太阳]': '☀️', '[礼物]': '🎁', '[强]': '👍',
+    '[弱]': '👎', '[握手]': '🤝', '[胜利]': '✌️', '[抱拳]': '🤜', '[勾引]': '😉',
+    '[拳头]': '👊', '[差劲]': '👎', '[爱你]': '🤟', '[NO]': '🚫', '[OK]': '👌',
+    '[爱情]': '❤️', '[飞吻]': '😘', '[跳跳]': '💃', '[发抖]': '😨', '[怄火]': '😤',
+    '[转圈]': '💫', '[磕头]': '🙏', '[回头]': '🔄', '[激动]': '😆', '[献吻]': '😘',
+    '[嘿嘿]': '😁', '[哈哈]': '😂', '[笑哭]': '😂', '[捂脸]': '🤦', '[破涕为笑]': '🥲',
+    '[加油]': '💪', '[打脸]': '🤦', '[我最美]': '💅', '[旺柴]': '🐶', '[爆竹]': '🧨',
+    '[红包]': '🧧', '[福]': '🎊', '[烟花]': '🎆', '[庆祝]': '🎉',
+}
+
+
+def decode_emoticons(text):
+    """Replace WeChat bracketed emoticon codes with emoji."""
+    for code, emoji in WECHAT_EMOTICONS.items():
+        if code in text:
+            text = text.replace(code, emoji)
+    return text
+
+
+def contains_chinese(text, threshold=0.15):
+    """Return True if at least `threshold` fraction of chars are CJK."""
+    if not text:
+        return False
+    cjk = sum(1 for c in text if '一' <= c <= '鿿' or '㐀' <= c <= '䶿')
+    return cjk / max(len(text), 1) >= threshold
+
+
+def translate_zh_to_en(text, cache):
+    """Translate Chinese text to English via Google Translate (no API key needed)."""
+    key = text[:500]
+    if key in cache:
+        return cache[key]
+    try:
+        import urllib.parse
+        encoded = urllib.parse.quote(key)
+        url = (
+            f"https://translate.googleapis.com/translate_a/single"
+            f"?client=gtx&sl=zh-CN&tl=en&dt=t&q={encoded}"
+        )
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        translated = ''.join(part[0] for part in data[0] if part and part[0])
+        translated = translated.strip()
+        cache[key] = translated
+        return translated
+    except Exception:
+        cache[key] = ''
+        return ''
 
 
 def safe_copy(src, dst):
@@ -461,6 +528,7 @@ def format_message_content(
     create_time=None, wechat_db_dir=None, output_dir=None, aes_key=None,
     xor_key=0x88, decrypted_dir=None, trans_cache=None, voice_language="en-US",
     media_conn=None, video_index=None, file_index=None,
+    do_translate=False, translation_cache=None,
 ):
     if not content:
         return ""
@@ -470,7 +538,13 @@ def format_message_content(
 
     # ── Plain text ────────────────────────────────────────────────────────────
     if msg_type_clean == 1:
-        return html.escape(content_str)
+        text = decode_emoticons(content_str)
+        text_html = html.escape(text).replace('\n', '<br>')
+        if do_translate and translation_cache is not None and contains_chinese(text):
+            translation = translate_zh_to_en(text, translation_cache)
+            if translation and translation.lower().strip() != text.lower().strip():
+                return f'{text_html}<div class="msg-translation">{html.escape(translation)}</div>'
+        return text_html
 
     # ── Image ─────────────────────────────────────────────────────────────────
     elif msg_type_clean == 3:
@@ -887,7 +961,7 @@ def get_message_preview(msg_type, content, packed_info=None, talker_user=None, m
 
     preview_text = ""
     if msg_type_clean == 1:
-        preview_text = content_str
+        preview_text = decode_emoticons(content_str)
     elif msg_type_clean == 3:
         preview_text = "[Image]"
     elif msg_type_clean == 34:
@@ -979,7 +1053,10 @@ def main():
     parser.add_argument('--since', metavar='YYYY-MM-DD', help='Only include messages on or after this date')
     parser.add_argument('--until', metavar='YYYY-MM-DD', help='Only include messages on or before this date')
     parser.add_argument('--incremental', action='store_true', help='Skip chats where the HTML file already exists')
+    parser.add_argument('--translate', action='store_true', help='Auto-translate Chinese messages to English (uses Google Translate, no API key needed)')
     args = parser.parse_args()
+
+    contact_filter = args.contact.lower() if args.contact else None
 
     since_ts = None
     until_ts = None
@@ -1034,6 +1111,17 @@ def main():
             print(f"[+] Loaded {len(FAILED_STICKERS)} failed sticker cache entries.")
         except Exception as e:
             print(f"[-] Error loading failed stickers cache: {e}")
+
+    # Load translation cache
+    translation_cache = {}
+    translation_cache_path = os.path.join(project_dir, "translation_cache.json")
+    if args.translate and os.path.exists(translation_cache_path):
+        try:
+            with open(translation_cache_path, "r", encoding="utf-8") as f:
+                translation_cache = json.load(f)
+            print(f"[+] Loaded {len(translation_cache)} cached translations.")
+        except Exception as e:
+            print(f"[-] Error loading translation cache: {e}")
 
     output_dir = config.get("output_dir", os.path.join(project_dir, "export"))
     html_out_dir = os.path.join(output_dir, "html")
@@ -1174,6 +1262,13 @@ def main():
                         "alias": ""
                     }
 
+                # Early-exit if contact filter is set and this table doesn't match
+                if contact_filter:
+                    contact_info_check = contacts.get(talker_user, {})
+                    name_check = contact_info_check.get("name", talker_user)
+                    if contact_filter not in talker_user.lower() and contact_filter not in name_check.lower():
+                        continue
+
                 col_map = get_columns_map(conn, table)
                 if not col_map.get("time") or not col_map.get("content"):
                     continue
@@ -1267,6 +1362,8 @@ def main():
                         media_conn=media_conn,
                         video_index=video_index,
                         file_index=file_index,
+                        do_translate=args.translate,
+                        translation_cache=translation_cache,
                     )
                     if not display_content:
                         continue
@@ -1321,8 +1418,6 @@ def main():
     dashboard_template = env.get_template("dashboard.html")
 
     dashboard_contacts = []
-    contact_filter = args.contact.lower() if args.contact else None
-
     print("[+] Exporting chat files...")
     exported = 0
     skipped = 0
@@ -1431,6 +1526,15 @@ def main():
         print(f"[+] Saved {len(trans_cache)} transcription cache entries.")
     except Exception as e:
         print(f"[-] Error saving transcription cache: {e}")
+
+    # Save translation cache
+    if args.translate and translation_cache:
+        try:
+            with open(translation_cache_path, "w", encoding="utf-8") as f:
+                json.dump(translation_cache, f, ensure_ascii=False, indent=2)
+            print(f"[+] Saved {len(translation_cache)} translation cache entries.")
+        except Exception as e:
+            print(f"[-] Error saving translation cache: {e}")
 
     # Save failed stickers cache
     try:

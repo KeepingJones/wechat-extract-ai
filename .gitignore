@@ -18,6 +18,7 @@ export/
 
 # Cache files
 transcription_cache.json
+translation_cache.json
 failed_stickers.json
 
 # Virtual environments
@@ -35,3 +36,4 @@ venv/
 
 # Debug output text files
 tools/*.txt
+.gstack/
