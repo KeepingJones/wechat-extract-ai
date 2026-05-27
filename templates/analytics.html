@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Analytics — WeChat Exporter</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #08090a;
+    color: #e8eaed;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Layout ── */
+  .page-header {
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+  .page-header h1 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .page-header h1 .icon { font-size: 20px; }
+  .header-meta {
+    font-size: 12px;
+    color: rgba(255,255,255,0.35);
+  }
+  .header-nav a {
+    color: #07c160;
+    text-decoration: none;
+    font-size: 13px;
+    padding: 6px 14px;
+    border: 1px solid rgba(7,193,96,0.3);
+    border-radius: 6px;
+    transition: all 0.15s;
+  }
+  .header-nav a:hover {
+    background: rgba(7,193,96,0.1);
+    border-color: rgba(7,193,96,0.6);
+  }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 28px 32px 60px; }
+
+  /* ── Stat cards ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 20px 24px;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color: rgba(255,255,255,0.14); }
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.35);
+    margin-bottom: 8px;
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-sub {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+  }
+  .stat-card.accent { border-color: rgba(7,193,96,0.25); }
+  .stat-card.accent .stat-value { color: #07c160; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 32px; }
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 16px;
+  }
+
+  /* ── Chart cards ── */
+  .chart-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .chart-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 20px;
+  }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  @media (max-width: 900px) {
+    .two-col, .three-col { grid-template-columns: 1fr; }
+  }
+
+  /* ── Heatmap ── */
+  .heatmap-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .heatmap-container {
+    display: flex;
+    gap: 3px;
+    min-width: 700px;
+  }
+  .heatmap-week {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .heatmap-cell {
+    width: 13px;
+    height: 13px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.05);
+    cursor: default;
+    transition: transform 0.1s;
+  }
+  .heatmap-cell:hover { transform: scale(1.4); z-index: 10; position: relative; }
+  .heatmap-cell[data-level="1"] { background: rgba(7,193,96,0.25); }
+  .heatmap-cell[data-level="2"] { background: rgba(7,193,96,0.45); }
+  .heatmap-cell[data-level="3"] { background: rgba(7,193,96,0.65); }
+  .heatmap-cell[data-level="4"] { background: rgba(7,193,96,0.85); }
+  .heatmap-legend {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+  }
+  .heatmap-legend-cell {
+    width: 12px; height: 12px; border-radius: 2px;
+  }
+  .heatmap-months {
+    display: flex;
+    gap: 0;
+    min-width: 700px;
+    font-size: 10px;
+    color: rgba(255,255,255,0.3);
+    margin-bottom: 4px;
+    padding-left: 2px;
+  }
+  .heatmap-month-label { flex: 1; }
+
+  /* ── Top contacts ── */
+  .contact-bar-list { display: flex; flex-direction: column; gap: 10px; }
+  .contact-bar-item { display: flex; align-items: center; gap: 12px; }
+  .contact-bar-name {
+    width: 130px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .contact-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .contact-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #07c160, #00e57a);
+    transition: width 0.8s cubic-bezier(.22,.61,.36,1);
+  }
+  .contact-bar-count {
+    width: 60px;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    text-align: right;
+  }
+
+  /* ── Word cloud ── */
+  .word-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: baseline;
+    padding: 8px 0;
+    max-height: 240px;
+    overflow: hidden;
+  }
+  .word-tag {
+    color: rgba(255,255,255,0.55);
+    cursor: default;
+    line-height: 1.4;
+    transition: color 0.15s;
+  }
+  .word-tag:hover { color: #07c160; }
+
+  /* ── Media breakdown ── */
+  .media-list { display: flex; flex-direction: column; gap: 10px; }
+  .media-item { display: flex; align-items: center; gap: 12px; }
+  .media-icon { font-size: 18px; width: 24px; text-align: center; }
+  .media-label { flex: 1; font-size: 13px; color: rgba(255,255,255,0.65); }
+  .media-bar-track {
+    width: 100px;
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .media-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa);
+    transition: width 0.8s cubic-bezier(.22,.61,.36,1);
+  }
+  .media-count {
+    width: 55px;
+    text-align: right;
+    font-size: 12px;
+    color: rgba(255,255,255,0.35);
+    flex-shrink: 0;
+  }
+
+  /* ── Tooltip ── */
+  .tooltip {
+    position: fixed;
+    background: #1e2126;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #e8eaed;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.15s;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="tooltip" id="tooltip"></div>
+
+<header class="page-header">
+  <h1><span class="icon">📊</span> Chat Analytics</h1>
+  <div class="header-meta">{{ data.first_date }} → {{ data.last_date }} &nbsp;·&nbsp; Generated {{ data.generated_at }}</div>
+  <nav class="header-nav">
+    <a href="index.html">← Dashboard</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ── Stat cards ── -->
+  <div class="stats-grid">
+    <div class="stat-card accent">
+      <div class="stat-label">Total Messages</div>
+      <div class="stat-value" id="stat-total">{{ data.total_messages }}</div>
+      <div class="stat-sub">{{ data.sent_messages }} sent · {{ data.received_messages }} received</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Conversations</div>
+      <div class="stat-value">{{ data.active_contacts }}</div>
+      <div class="stat-sub">unique contacts</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Peak Day</div>
+      <div class="stat-value" style="font-size:20px">{{ data.peak_count }}</div>
+      <div class="stat-sub">{{ data.peak_day }}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Images</div>
+      <div class="stat-value">{{ data.media_totals.images }}</div>
+      <div class="stat-sub">photos shared</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Voice Messages</div>
+      <div class="stat-value">{{ data.media_totals.voice }}</div>
+      <div class="stat-sub">audio clips</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Videos</div>
+      <div class="stat-value">{{ data.media_totals.video }}</div>
+      <div class="stat-sub">video messages</div>
+    </div>
+  </div>
+
+  <!-- ── Activity heatmap ── -->
+  <div class="section">
+    <div class="section-title">Daily Activity — Last 365 Days</div>
+    <div class="chart-card">
+      <div class="heatmap-months" id="heatmap-months"></div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-container" id="heatmap"></div>
+      </div>
+      <div class="heatmap-legend">
+        <span>Less</span>
+        <div class="heatmap-legend-cell" style="background:rgba(255,255,255,0.05)"></div>
+        <div class="heatmap-legend-cell" style="background:rgba(7,193,96,0.25)"></div>
+        <div class="heatmap-legend-cell" style="background:rgba(7,193,96,0.45)"></div>
+        <div class="heatmap-legend-cell" style="background:rgba(7,193,96,0.65)"></div>
+        <div class="heatmap-legend-cell" style="background:rgba(7,193,96,0.85)"></div>
+        <span>More</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Top contacts + hourly ── -->
+  <div class="two-col section">
+
+    <div class="chart-card">
+      <h3>Top Contacts by Message Count</h3>
+      <div class="contact-bar-list" id="top-contacts-bars"></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Messages by Hour of Day</h3>
+      <canvas id="hourlyChart" height="220"></canvas>
+    </div>
+
+  </div>
+
+  <!-- ── Weekday + media ── -->
+  <div class="two-col section">
+
+    <div class="chart-card">
+      <h3>Messages by Day of Week</h3>
+      <canvas id="weekdayChart" height="220"></canvas>
+    </div>
+
+    <div class="chart-card">
+      <h3>Media Breakdown</h3>
+      <div class="media-list" id="media-list"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Sent vs received ── -->
+  <div class="section">
+    <div class="chart-card">
+      <h3>Message Volume — Last 365 Days</h3>
+      <canvas id="dailyChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Word cloud ── -->
+  <div class="section">
+    <div class="section-title">Most Frequent Words (English messages)</div>
+    <div class="chart-card">
+      <div class="word-cloud" id="word-cloud"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+const DATA = {{ data_json | safe }};
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, text) {
+  tooltip.textContent = text;
+  tooltip.style.opacity = '1';
+  tooltip.style.left = (e.clientX + 14) + 'px';
+  tooltip.style.top  = (e.clientY - 28) + 'px';
+}
+function hideTooltip() { tooltip.style.opacity = '0'; }
+
+// ── Heatmap ──────────────────────────────────────────────────────────────────
+(function buildHeatmap() {
+  const series = DATA.daily_series;  // [{date, count}, …] oldest first
+  const maxCount = Math.max(...series.map(d => d.count), 1);
+
+  function level(count) {
+    if (!count)          return 0;
+    if (count < maxCount * 0.2) return 1;
+    if (count < maxCount * 0.4) return 2;
+    if (count < maxCount * 0.7) return 3;
+    return 4;
+  }
+
+  // Pad start so week 0 starts on Monday
+  const firstDate = new Date(series[0].date + 'T00:00:00Z');
+  const dayOfWeek = (firstDate.getUTCDay() + 6) % 7;  // Mon=0
+  const padded = Array(dayOfWeek).fill(null).concat(series);
+
+  // Build weeks
+  const weeks = [];
+  for (let i = 0; i < padded.length; i += 7) {
+    weeks.push(padded.slice(i, i + 7));
+  }
+
+  // Month labels
+  const monthLabels = [];
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let lastMonth = -1;
+  weeks.forEach((week, wi) => {
+    const day = week.find(d => d !== null);
+    if (!day) { monthLabels.push(''); return; }
+    const m = new Date(day.date + 'T00:00:00Z').getUTCMonth();
+    if (m !== lastMonth) { monthLabels.push(MONTHS[m]); lastMonth = m; }
+    else { monthLabels.push(''); }
+  });
+
+  const monthsEl = document.getElementById('heatmap-months');
+  monthLabels.forEach(label => {
+    const span = document.createElement('span');
+    span.className = 'heatmap-month-label';
+    span.textContent = label;
+    monthsEl.appendChild(span);
+  });
+
+  const container = document.getElementById('heatmap');
+  weeks.forEach(week => {
+    const col = document.createElement('div');
+    col.className = 'heatmap-week';
+    week.forEach(day => {
+      const cell = document.createElement('div');
+      cell.className = 'heatmap-cell';
+      if (day) {
+        const lv = level(day.count);
+        cell.setAttribute('data-level', lv);
+        cell.addEventListener('mouseenter', e => showTooltip(e, `${day.date}: ${day.count.toLocaleString()} messages`));
+        cell.addEventListener('mouseleave', hideTooltip);
+        cell.addEventListener('mousemove', e => {
+          tooltip.style.left = (e.clientX + 14) + 'px';
+          tooltip.style.top  = (e.clientY - 28) + 'px';
+        });
+      }
+      col.appendChild(cell);
+    });
+    container.appendChild(col);
+  });
+})();
+
+// ── Top contacts bars ────────────────────────────────────────────────────────
+(function buildContactBars() {
+  const contacts = DATA.top_contacts;
+  const maxVal = contacts.length ? contacts[0].total : 1;
+  const el = document.getElementById('top-contacts-bars');
+  contacts.forEach(c => {
+    const pct = (c.total / maxVal * 100).toFixed(1);
+    el.innerHTML += `
+      <div class="contact-bar-item">
+        <div class="contact-bar-name" title="${c.name}">${c.name}</div>
+        <div class="contact-bar-track">
+          <div class="contact-bar-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="contact-bar-count">${c.total.toLocaleString()}</div>
+      </div>`;
+  });
+})();
+
+// ── Hourly chart ─────────────────────────────────────────────────────────────
+(function buildHourlyChart() {
+  const series = DATA.hourly_series;
+  const labels = series.map(d => {
+    const h = d.hour;
+    return h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h-12}pm`;
+  });
+  new Chart(document.getElementById('hourlyChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: series.map(d => d.count),
+        backgroundColor: 'rgba(7,193,96,0.55)',
+        borderColor: 'rgba(7,193,96,0.9)',
+        borderWidth: 1,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 10 }, maxRotation: 45 } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 10 } } }
+      }
+    }
+  });
+})();
+
+// ── Weekday chart ────────────────────────────────────────────────────────────
+(function buildWeekdayChart() {
+  const series = DATA.weekday_series;
+  new Chart(document.getElementById('weekdayChart'), {
+    type: 'bar',
+    data: {
+      labels: series.map(d => d.day),
+      datasets: [{
+        data: series.map(d => d.count),
+        backgroundColor: 'rgba(96,165,250,0.55)',
+        borderColor: 'rgba(96,165,250,0.9)',
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.35)' } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.35)' } }
+      }
+    }
+  });
+})();
+
+// ── Daily line chart ─────────────────────────────────────────────────────────
+(function buildDailyChart() {
+  const series = DATA.daily_series;
+  // Sample every 3 days to keep chart readable
+  const sampled = series.filter((_, i) => i % 3 === 0);
+  new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: {
+      labels: sampled.map(d => d.date),
+      datasets: [{
+        data: sampled.map(d => d.count),
+        borderColor: '#07c160',
+        backgroundColor: 'rgba(7,193,96,0.08)',
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 12 }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: 'rgba(255,255,255,0.35)', font: { size: 10 } }
+        }
+      }
+    }
+  });
+})();
+
+// ── Media breakdown ──────────────────────────────────────────────────────────
+(function buildMedia() {
+  const t = DATA.media_totals;
+  const items = [
+    { icon: '🖼️', label: 'Images',   count: t.images },
+    { icon: '🎙️', label: 'Voice',    count: t.voice  },
+    { icon: '📹', label: 'Video',    count: t.video  },
+    { icon: '🎭', label: 'Stickers', count: t.stickers },
+    { icon: '📎', label: 'Files',    count: t.files  },
+  ];
+  const maxVal = Math.max(...items.map(i => i.count), 1);
+  const el = document.getElementById('media-list');
+  items.forEach(item => {
+    const pct = (item.count / maxVal * 100).toFixed(1);
+    el.innerHTML += `
+      <div class="media-item">
+        <div class="media-icon">${item.icon}</div>
+        <div class="media-label">${item.label}</div>
+        <div class="media-bar-track">
+          <div class="media-bar-fill" style="width:${pct}%"></div>
+        </div>
+        <div class="media-count">${item.count.toLocaleString()}</div>
+      </div>`;
+  });
+})();
+
+// ── Word cloud ───────────────────────────────────────────────────────────────
+(function buildWordCloud() {
+  const words = DATA.word_freq.slice(0, 70);
+  if (!words.length) return;
+  const max = words[0].count;
+  const min = words[words.length - 1].count;
+  const el = document.getElementById('word-cloud');
+  const colors = ['rgba(7,193,96,0.8)','rgba(96,165,250,0.8)','rgba(251,191,36,0.7)','rgba(248,113,113,0.7)','rgba(167,139,250,0.7)'];
+  words.forEach((w, i) => {
+    const ratio = min === max ? 0.5 : (w.count - min) / (max - min);
+    const size = 11 + Math.round(ratio * 22);
+    const color = colors[i % colors.length];
+    const span = document.createElement('span');
+    span.className = 'word-tag';
+    span.textContent = w.word;
+    span.style.fontSize = size + 'px';
+    span.style.color = color;
+    span.addEventListener('mouseenter', e => showTooltip(e, `"${w.word}" — ${w.count.toLocaleString()} times`));
+    span.addEventListener('mouseleave', hideTooltip);
+    el.appendChild(span);
+  });
+})();
+
+// Animate stat counter
+(function animateCounters() {
+  document.querySelectorAll('.stat-value').forEach(el => {
+    const target = parseInt(el.textContent.replace(/,/g, ''), 10);
+    if (isNaN(target) || target < 100) return;
+    let start = 0;
+    const duration = 1000;
+    const step = ts => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(ease * target).toLocaleString();
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+})();
+</script>
+</body>
+</html>
